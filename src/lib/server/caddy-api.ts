@@ -62,6 +62,23 @@ type RemoteIpPayload =
 			values: string[];
 	  };
 
+type RemoteIpState = {
+	path: string;
+	payload: RemoteIpPayload;
+};
+
+function buildCandidateRemoteIpPaths(path: string): string[] {
+	const candidates = new Set<string>([path]);
+	const nestedMatcherPattern = /^(.+\/routes\/\d+)\/match\/(\d+)\/remote_ip$/;
+	const match = path.match(nestedMatcherPattern);
+	if (match) {
+		const routePrefix = match[1];
+		const matchIndex = match[2];
+		candidates.add(`${routePrefix}/handle/0/routes/0/match/${matchIndex}/remote_ip`);
+	}
+	return [...candidates];
+}
+
 function describePayloadShape(value: unknown): string {
 	if (value === null) {
 		return 'null';
@@ -123,10 +140,7 @@ function coerceRangeList(path: string, value: unknown): string[] {
 
 function parseRemoteIpPayload(path: string, payload: unknown): RemoteIpPayload {
 	if (payload === null) {
-		return {
-			shape: 'array',
-			values: []
-		};
+		throw new Error(`No remote_ip matcher payload at ${path}`);
 	}
 
 	if (Array.isArray(payload) || typeof payload === 'string') {
@@ -172,33 +186,43 @@ function parseRemoteIpPayload(path: string, payload: unknown): RemoteIpPayload {
 }
 
 async function getRemoteIpList(path: string): Promise<RemoteIpPayload> {
-	const response = await requestCaddy(path, { method: 'GET' });
-	const payload = (await response.json()) as unknown;
+	const state = await getRemoteIpState(path);
+	return state.payload;
+}
 
-	return parseRemoteIpPayload(path, payload);
+async function getRemoteIpState(path: string): Promise<RemoteIpState> {
+	const candidates = buildCandidateRemoteIpPaths(path);
+	for (const candidate of candidates) {
+		try {
+			const response = await requestCaddy(candidate, { method: 'GET' });
+			const rawPayload = (await response.json()) as unknown;
+			try {
+				return {
+					path: candidate,
+					payload: parseRemoteIpPayload(candidate, rawPayload)
+				};
+			} catch {
+				continue;
+			}
+		} catch (caught) {
+			if (caught instanceof CaddyApiError && caught.details.status === 404) {
+				continue;
+			}
+			throw caught;
+		}
+	}
+
+	throw new Error(`Unable to locate remote_ip matcher. Tried: ${candidates.join(', ')}`);
 }
 
 async function putRemoteIpList(path: string, payload: RemoteIpPayload): Promise<void> {
 	// Caddy's remote_ip matcher is an object (MatchRemoteIP), not a raw array.
 	// Always write the canonical shape to avoid "cannot unmarshal array" errors.
 	const body = JSON.stringify({ ranges: payload.values });
-
-	try {
-		await requestCaddy(path, {
-			method: 'PATCH',
-			body
-		});
-	} catch (caught) {
-		// If the field does not exist yet, create it.
-		if (caught instanceof CaddyApiError && caught.details.status === 404) {
-			await requestCaddy(path, {
-				method: 'PUT',
-				body
-			});
-			return;
-		}
-		throw caught;
-	}
+	await requestCaddy(path, {
+		method: 'PATCH',
+		body
+	});
 }
 
 function dedupeAndSort(values: string[]): string[] {
@@ -206,19 +230,19 @@ function dedupeAndSort(values: string[]): string[] {
 }
 
 export async function allowlistIp(path: string, ip: string): Promise<void> {
-	const current = await getRemoteIpList(path);
-	const next = dedupeAndSort([...current.values, ip]);
-	await putRemoteIpList(path, {
-		...current,
+	const current = await getRemoteIpState(path);
+	const next = dedupeAndSort([...current.payload.values, ip]);
+	await putRemoteIpList(current.path, {
+		...current.payload,
 		values: next
 	});
 }
 
 export async function removeAllowlistIp(path: string, ip: string): Promise<void> {
-	const current = await getRemoteIpList(path);
-	const next = dedupeAndSort(current.values.filter((entry) => entry !== ip));
-	await putRemoteIpList(path, {
-		...current,
+	const current = await getRemoteIpState(path);
+	const next = dedupeAndSort(current.payload.values.filter((entry) => entry !== ip));
+	await putRemoteIpList(current.path, {
+		...current.payload,
 		values: next
 	});
 }
