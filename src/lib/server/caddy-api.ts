@@ -62,34 +62,120 @@ type RemoteIpPayload =
 			values: string[];
 	  };
 
-function parseStringArray(path: string, value: unknown): string[] {
-	if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
-		throw new Error(`Expected string[] response from Caddy at ${path}`);
+function describePayloadShape(value: unknown): string {
+	if (value === null) {
+		return 'null';
 	}
 
-	return value;
+	if (Array.isArray(value)) {
+		return `array(len=${value.length})`;
+	}
+
+	if (typeof value === 'object') {
+		const keys = Object.keys(value as Record<string, unknown>);
+		return `object(keys=${keys.join(',') || '(none)'})`;
+	}
+
+	return typeof value;
+}
+
+function describePayloadPreview(value: unknown): string {
+	try {
+		const serialized = JSON.stringify(value);
+		if (serialized === undefined) {
+			return String(value);
+		}
+		return serialized.length > 240 ? `${serialized.slice(0, 240)}...` : serialized;
+	} catch {
+		return '[unserializable payload]';
+	}
+}
+
+function coerceRangeList(path: string, value: unknown): string[] {
+	if (typeof value === 'string') {
+		return [value];
+	}
+
+	if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) {
+		return value;
+	}
+
+	// Some matcher encodings may use objects per range; accept common keys defensively.
+	if (
+		Array.isArray(value) &&
+		value.every((entry) => {
+			if (!entry || typeof entry !== 'object') {
+				return false;
+			}
+			const maybeRecord = entry as Record<string, unknown>;
+			return typeof maybeRecord.cidr === 'string' || typeof maybeRecord.range === 'string';
+		})
+	) {
+		return (value as Array<Record<string, unknown>>).map(
+			(entry) => (entry.cidr as string | undefined) ?? (entry.range as string)
+		);
+	}
+
+	throw new Error(
+		`Expected a Caddy IP range list at ${path}; got ${describePayloadShape(value)} ${describePayloadPreview(value)}`
+	);
+}
+
+function parseRemoteIpPayload(path: string, payload: unknown): RemoteIpPayload {
+	if (payload === null) {
+		return {
+			shape: 'array',
+			values: []
+		};
+	}
+
+	if (Array.isArray(payload) || typeof payload === 'string') {
+		return {
+			shape: 'array',
+			values: coerceRangeList(path, payload)
+		};
+	}
+
+	if (payload && typeof payload === 'object') {
+		const record = payload as Record<string, unknown>;
+
+		if ('ranges' in record) {
+			return {
+				shape: 'ranges_object',
+				values: coerceRangeList(path, record.ranges)
+			};
+		}
+
+		// If caller accidentally points to /match/N, extract nested remote_ip matcher payload.
+		if ('remote_ip' in record && record.remote_ip && typeof record.remote_ip === 'object') {
+			const nested = record.remote_ip as Record<string, unknown>;
+			if ('ranges' in nested) {
+				return {
+					shape: 'ranges_object',
+					values: coerceRangeList(path, nested.ranges)
+				};
+			}
+		}
+
+		// Empty object is treated as no ranges configured.
+		if (Object.keys(record).length === 0) {
+			return {
+				shape: 'ranges_object',
+				values: []
+			};
+		}
+	}
+
+	throw new Error(
+		`Expected string[] or { ranges: string[] } response from Caddy at ${path}; got ${describePayloadShape(payload)} ${describePayloadPreview(payload)}`
+	);
 }
 
 async function getRemoteIpList(path: string): Promise<RemoteIpPayload> {
 	const response = await requestCaddy(path, { method: 'GET' });
 	const payload = (await response.json()) as unknown;
 
-	if (Array.isArray(payload)) {
-		return {
-			shape: 'array',
-			values: parseStringArray(path, payload)
-		};
-	}
-
-	if (payload && typeof payload === 'object' && 'ranges' in payload) {
-		const ranges = (payload as { ranges: unknown }).ranges;
-		return {
-			shape: 'ranges_object',
-			values: parseStringArray(path, ranges)
-		};
-	}
-
-	throw new Error(`Expected string[] or { ranges: string[] } response from Caddy at ${path}`);
+	return parseRemoteIpPayload(path, payload);
 }
 
 async function putRemoteIpList(path: string, payload: RemoteIpPayload): Promise<void> {
