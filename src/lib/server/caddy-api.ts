@@ -179,13 +179,26 @@ async function getRemoteIpList(path: string): Promise<RemoteIpPayload> {
 }
 
 async function putRemoteIpList(path: string, payload: RemoteIpPayload): Promise<void> {
-	const body =
-		payload.shape === 'array' ? JSON.stringify(payload.values) : JSON.stringify({ ranges: payload.values });
+	// Caddy's remote_ip matcher is an object (MatchRemoteIP), not a raw array.
+	// Always write the canonical shape to avoid "cannot unmarshal array" errors.
+	const body = JSON.stringify({ ranges: payload.values });
 
-	await requestCaddy(path, {
-		method: 'PUT',
-		body
-	});
+	try {
+		await requestCaddy(path, {
+			method: 'PATCH',
+			body
+		});
+	} catch (caught) {
+		// If the field does not exist yet, create it.
+		if (caught instanceof CaddyApiError && caught.details.status === 404) {
+			await requestCaddy(path, {
+				method: 'PUT',
+				body
+			});
+			return;
+		}
+		throw caught;
+	}
 }
 
 function dedupeAndSort(values: string[]): string[] {
