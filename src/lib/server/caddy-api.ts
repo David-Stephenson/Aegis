@@ -52,21 +52,53 @@ async function requestCaddy(path: string, init: RequestInit): Promise<Response> 
 	throw new Error('Unreachable retry state');
 }
 
-async function getRemoteIpList(path: string): Promise<string[]> {
-	const response = await requestCaddy(path, { method: 'GET' });
-	const payload = (await response.json()) as unknown;
+type RemoteIpPayload =
+	| {
+			shape: 'array';
+			values: string[];
+	  }
+	| {
+			shape: 'ranges_object';
+			values: string[];
+	  };
 
-	if (!Array.isArray(payload) || payload.some((entry) => typeof entry !== 'string')) {
+function parseStringArray(path: string, value: unknown): string[] {
+	if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
 		throw new Error(`Expected string[] response from Caddy at ${path}`);
 	}
 
-	return payload;
+	return value;
 }
 
-async function putRemoteIpList(path: string, values: string[]): Promise<void> {
+async function getRemoteIpList(path: string): Promise<RemoteIpPayload> {
+	const response = await requestCaddy(path, { method: 'GET' });
+	const payload = (await response.json()) as unknown;
+
+	if (Array.isArray(payload)) {
+		return {
+			shape: 'array',
+			values: parseStringArray(path, payload)
+		};
+	}
+
+	if (payload && typeof payload === 'object' && 'ranges' in payload) {
+		const ranges = (payload as { ranges: unknown }).ranges;
+		return {
+			shape: 'ranges_object',
+			values: parseStringArray(path, ranges)
+		};
+	}
+
+	throw new Error(`Expected string[] or { ranges: string[] } response from Caddy at ${path}`);
+}
+
+async function putRemoteIpList(path: string, payload: RemoteIpPayload): Promise<void> {
+	const body =
+		payload.shape === 'array' ? JSON.stringify(payload.values) : JSON.stringify({ ranges: payload.values });
+
 	await requestCaddy(path, {
 		method: 'PUT',
-		body: JSON.stringify(values)
+		body
 	});
 }
 
@@ -76,12 +108,18 @@ function dedupeAndSort(values: string[]): string[] {
 
 export async function allowlistIp(path: string, ip: string): Promise<void> {
 	const current = await getRemoteIpList(path);
-	const next = dedupeAndSort([...current, ip]);
-	await putRemoteIpList(path, next);
+	const next = dedupeAndSort([...current.values, ip]);
+	await putRemoteIpList(path, {
+		...current,
+		values: next
+	});
 }
 
 export async function removeAllowlistIp(path: string, ip: string): Promise<void> {
 	const current = await getRemoteIpList(path);
-	const next = current.filter((entry) => entry !== ip);
-	await putRemoteIpList(path, dedupeAndSort(next));
+	const next = dedupeAndSort(current.values.filter((entry) => entry !== ip));
+	await putRemoteIpList(path, {
+		...current,
+		values: next
+	});
 }
