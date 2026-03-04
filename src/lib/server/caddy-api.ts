@@ -67,6 +67,14 @@ type RemoteIpState = {
 	payload: RemoteIpPayload;
 };
 
+export type DiscoveredService = {
+	id: string;
+	host: string | null;
+	allowlistConfigPath: string | null;
+	sourcePath: string;
+	proxyUpstreams: string[];
+};
+
 function buildCandidateRemoteIpPaths(path: string): string[] {
 	const candidates = new Set<string>([path]);
 	const nestedMatcherPattern = /^(.+\/routes\/\d+)\/match\/(\d+)\/remote_ip$/;
@@ -227,6 +235,234 @@ async function putRemoteIpList(path: string, payload: RemoteIpPayload): Promise<
 
 function dedupeAndSort(values: string[]): string[] {
 	return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+}
+
+function slugifyServiceId(input: string): string {
+	const slug = input
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+	return slug || 'service';
+}
+
+function createDeterministicSuffix(input: string): string {
+	let hash = 0;
+	for (let index = 0; index < input.length; index += 1) {
+		hash = (hash * 33 + input.charCodeAt(index)) % 2_147_483_647;
+	}
+	return hash.toString(36);
+}
+
+function deriveBaseServiceId(host: string | null, sourcePath: string): string {
+	if (host) {
+		return slugifyServiceId(host);
+	}
+	const normalizedPath = sourcePath.replace(/^\/config\/apps\/http\/servers\//, '');
+	return slugifyServiceId(normalizedPath);
+}
+
+type DiscoveredServiceSeed = {
+	baseId: string;
+	host: string | null;
+	allowlistConfigPath: string | null;
+	sourcePath: string;
+	proxyUpstreams: string[];
+};
+
+function collectHostsFromMatchers(matchers: unknown): string[] {
+	if (!Array.isArray(matchers)) {
+		return [];
+	}
+	const hosts = new Set<string>();
+	for (const matcher of matchers) {
+		if (!matcher || typeof matcher !== 'object') {
+			continue;
+		}
+		const maybeHost = (matcher as Record<string, unknown>).host;
+		if (Array.isArray(maybeHost)) {
+			for (const entry of maybeHost) {
+				if (typeof entry === 'string' && entry.length > 0) {
+					hosts.add(entry);
+				}
+			}
+		}
+	}
+	return [...hosts];
+}
+
+function hasRemoteIpMatcher(matcher: unknown): boolean {
+	return !!matcher && typeof matcher === 'object' && 'remote_ip' in (matcher as Record<string, unknown>);
+}
+
+function collectReverseProxyUpstreams(handles: unknown): string[] {
+	if (!Array.isArray(handles)) {
+		return [];
+	}
+	const upstreams = new Set<string>();
+	for (const handle of handles) {
+		if (!handle || typeof handle !== 'object') {
+			continue;
+		}
+		const record = handle as Record<string, unknown>;
+		if (record.handler !== 'reverse_proxy') {
+			continue;
+		}
+		const maybeUpstreams = record.upstreams;
+		if (!Array.isArray(maybeUpstreams)) {
+			continue;
+		}
+		for (const upstream of maybeUpstreams) {
+			if (!upstream || typeof upstream !== 'object') {
+				continue;
+			}
+			const dial = (upstream as Record<string, unknown>).dial;
+			if (typeof dial === 'string' && dial.length > 0) {
+				upstreams.add(dial);
+			}
+		}
+	}
+	return [...upstreams];
+}
+
+function collectDiscoveredServiceSeedsFromRoutes(
+	routes: unknown,
+	routePathPrefix: string,
+	inheritedHosts: string[],
+	output: DiscoveredServiceSeed[]
+): void {
+	if (!Array.isArray(routes)) {
+		return;
+	}
+
+	for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+		const route = routes[routeIndex];
+		if (!route || typeof route !== 'object') {
+			continue;
+		}
+
+		const routePath = `${routePathPrefix}/${routeIndex}`;
+		const routeRecord = route as Record<string, unknown>;
+		const routeMatchers = routeRecord.match;
+		const routeHosts = [
+			...new Set([...inheritedHosts, ...collectHostsFromMatchers(routeMatchers)])
+		];
+		const handles = routeRecord.handle;
+		const proxyUpstreams = collectReverseProxyUpstreams(handles);
+		let allowlistConfigPath: string | null = null;
+
+		if (Array.isArray(routeMatchers)) {
+			for (let matcherIndex = 0; matcherIndex < routeMatchers.length; matcherIndex += 1) {
+				const matcher = routeMatchers[matcherIndex];
+				if (!hasRemoteIpMatcher(matcher)) {
+					continue;
+				}
+				allowlistConfigPath = `${routePath}/match/${matcherIndex}/remote_ip`;
+				break;
+			}
+		}
+
+		if (proxyUpstreams.length > 0) {
+			const hostsToCreate = routeHosts.length > 0 ? routeHosts : [null];
+			for (const host of hostsToCreate) {
+				output.push({
+					baseId: deriveBaseServiceId(host, routePath),
+					host,
+					allowlistConfigPath,
+					sourcePath: routePath,
+					proxyUpstreams
+				});
+			}
+		}
+
+		if (!Array.isArray(handles)) {
+			continue;
+		}
+		for (let handleIndex = 0; handleIndex < handles.length; handleIndex += 1) {
+			const handle = handles[handleIndex];
+			if (!handle || typeof handle !== 'object') {
+				continue;
+			}
+			const nestedRoutes = (handle as Record<string, unknown>).routes;
+			if (!Array.isArray(nestedRoutes)) {
+				continue;
+			}
+			collectDiscoveredServiceSeedsFromRoutes(
+				nestedRoutes,
+				`${routePath}/handle/${handleIndex}/routes`,
+				routeHosts,
+				output
+			);
+		}
+	}
+}
+
+export function extractDiscoveredServicesFromServersConfig(payload: unknown): DiscoveredService[] {
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		return [];
+	}
+
+	const seeds: DiscoveredServiceSeed[] = [];
+	const servers = payload as Record<string, unknown>;
+	for (const [serverName, serverConfig] of Object.entries(servers)) {
+		if (!serverConfig || typeof serverConfig !== 'object') {
+			continue;
+		}
+		const routes = (serverConfig as Record<string, unknown>).routes;
+		collectDiscoveredServiceSeedsFromRoutes(
+			routes,
+			`/config/apps/http/servers/${serverName}/routes`,
+			[],
+			seeds
+		);
+	}
+
+	const mergedByServiceKey = new Map<string, DiscoveredServiceSeed>();
+	for (const seed of seeds) {
+		const serviceKey = seed.host ?? seed.sourcePath;
+		const existing = mergedByServiceKey.get(serviceKey);
+		if (!existing) {
+			mergedByServiceKey.set(serviceKey, seed);
+			continue;
+		}
+
+		mergedByServiceKey.set(serviceKey, {
+			...existing,
+			allowlistConfigPath: existing.allowlistConfigPath ?? seed.allowlistConfigPath,
+			proxyUpstreams: [...new Set([...existing.proxyUpstreams, ...seed.proxyUpstreams])].sort((a, b) =>
+				a.localeCompare(b)
+			)
+		});
+	}
+
+	const sortedSeeds = [...mergedByServiceKey.values()].sort((a, b) => {
+		const aKey = a.host ?? a.sourcePath;
+		const bKey = b.host ?? b.sourcePath;
+		return aKey.localeCompare(bKey);
+	});
+
+	const seenIds = new Set<string>();
+	return sortedSeeds.map((seed) => {
+		let id = seed.baseId;
+		if (seenIds.has(id)) {
+			id = `${seed.baseId}-${createDeterministicSuffix(seed.sourcePath)}`;
+		}
+		seenIds.add(id);
+		return {
+			id,
+			host: seed.host,
+			allowlistConfigPath: seed.allowlistConfigPath,
+			sourcePath: seed.sourcePath,
+			proxyUpstreams: seed.proxyUpstreams
+		};
+	});
+}
+
+export async function listDiscoveredServices(): Promise<DiscoveredService[]> {
+	const response = await requestCaddy('/config/apps/http/servers', {
+		method: 'GET'
+	});
+	const payload = (await response.json()) as unknown;
+	return extractDiscoveredServicesFromServersConfig(payload);
 }
 
 export async function allowlistIp(path: string, ip: string): Promise<void> {

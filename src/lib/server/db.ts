@@ -34,6 +34,17 @@ CREATE TABLE IF NOT EXISTS audit_events (
   detail TEXT,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS service_overrides (
+  service_id TEXT PRIMARY KEY,
+  display_name TEXT,
+  description TEXT,
+  icon TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 1000,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `);
 
 const auditColumns = db.prepare('PRAGMA table_info(audit_events)').all() as Array<{ name: string }>;

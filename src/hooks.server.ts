@@ -1,4 +1,4 @@
-import { redirect, type Handle } from '@sveltejs/kit';
+import { redirect, type Handle, error } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { handle as authHandle } from './auth';
 
@@ -12,6 +12,13 @@ const authorizationHandle: Handle = async ({ event, resolve }) => {
 	const session = await event.locals.auth();
 	if (!session?.user?.id) {
 		throw redirect(303, '/login');
+	}
+
+	if (event.url.pathname.startsWith('/admin')) {
+		const groups = (session.user as { groups?: string[] }).groups ?? [];
+		if (!groups.includes('admin')) {
+			throw error(403, 'Forbidden: Admin access required');
+		}
 	}
 
 	return resolve(event);

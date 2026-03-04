@@ -48,3 +48,21 @@ export function listAllowlistEntriesForUser(userId: string): AllowlistEntry[] {
 		)
 		.all(userId) as AllowlistEntry[];
 }
+
+export function listAllowlistEntries(limit = 1000): AllowlistEntry[] {
+	return db
+		.prepare(
+			`SELECT
+      id,
+      user_id AS userId,
+      user_email AS userEmail,
+      service_id AS serviceId,
+      ip,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM allowlist_entries
+    ORDER BY datetime(updated_at) DESC, id DESC
+    LIMIT ?`
+		)
+		.all(limit) as AllowlistEntry[];
+}

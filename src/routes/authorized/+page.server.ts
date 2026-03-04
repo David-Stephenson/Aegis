@@ -19,7 +19,9 @@ export const load: PageServerLoad = async (event) => {
 	const user = await requireAuthUser(event);
 	const clientIp = resolveClientIp(event);
 	const allowedServiceIds = new Set(getAllowedServiceIdsForGroups(user.groups));
-	const allowedServices = getServiceDefinitions().filter((service) => allowedServiceIds.has(service.id));
+	const allowedServices = (await getServiceDefinitions()).filter((service) =>
+		allowedServiceIds.has(service.id)
+	);
 	const existingEntries = listAllowlistEntriesForUser(user.id);
 
 	const results: ServiceAuthorizationResult[] = [];

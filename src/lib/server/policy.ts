@@ -1,5 +1,4 @@
 import { appEnv } from '$lib/server/env';
-import { getServiceById } from '$lib/server/services';
 
 export type AuthUser = {
 	id: string;
@@ -19,8 +18,5 @@ export function getAllowedServiceIdsForGroups(groups: string[]): string[] {
 }
 
 export function canUserAccessService(user: AuthUser, serviceId: string): boolean {
-	if (!getServiceById(serviceId)) {
-		return false;
-	}
 	return getAllowedServiceIdsForGroups(user.groups).includes(serviceId);
 }
