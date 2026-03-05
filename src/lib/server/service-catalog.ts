@@ -45,7 +45,15 @@ export async function getServiceCatalog(): Promise<ServiceCatalogResult> {
 		warnings.push(`Service discovery failed: ${message}`);
 	}
 
-	const overridesById = new Map(listServiceOverrides().map((override) => [override.serviceId, override]));
+	let overrides = [] as ReturnType<typeof listServiceOverrides>;
+	try {
+		overrides = listServiceOverrides();
+	} catch (caught) {
+		const message = caught instanceof Error ? caught.message : 'Unknown service override error';
+		warnings.push(`Service overrides failed: ${message}`);
+	}
+
+	const overridesById = new Map(overrides.map((override) => [override.serviceId, override]));
 	const merged: ServiceCatalogItem[] = discovered.map((service) => {
 		const override = overridesById.get(service.id);
 		const proxyUpstreams = Array.isArray(service.proxyUpstreams) ? service.proxyUpstreams : [];

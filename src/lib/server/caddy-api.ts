@@ -444,7 +444,14 @@ export function extractDiscoveredServicesFromServersConfig(payload: unknown): Di
 	return sortedSeeds.map((seed) => {
 		let id = seed.baseId;
 		if (seenIds.has(id)) {
-			id = `${seed.baseId}-${createDeterministicSuffix(seed.sourcePath)}`;
+			const deterministicSuffix = createDeterministicSuffix(seed.sourcePath);
+			let candidate = `${seed.baseId}-${deterministicSuffix}`;
+			let counter = 1;
+			while (seenIds.has(candidate)) {
+				candidate = `${seed.baseId}-${deterministicSuffix}-${counter}`;
+				counter += 1;
+			}
+			id = candidate;
 		}
 		seenIds.add(id);
 		return {

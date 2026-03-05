@@ -6,6 +6,8 @@ export type UserAllowlistActivity = {
 	lastActivityAt: string;
 	uniqueServiceCount: number;
 	uniqueIpCount: number;
+	serviceIds?: string[];
+	ips?: string[];
 };
 
 export type AllowlistHistoryItem = {
@@ -62,6 +64,14 @@ function combineActivityRecords(
 	base: UserAllowlistActivity,
 	next: UserAllowlistActivity
 ): UserAllowlistActivity {
+	const canMergeServiceSets = Array.isArray(base.serviceIds) && Array.isArray(next.serviceIds);
+	const canMergeIpSets = Array.isArray(base.ips) && Array.isArray(next.ips);
+	const mergedServiceIds = canMergeServiceSets
+		? new Set<string>([...(base.serviceIds ?? []), ...(next.serviceIds ?? [])])
+		: null;
+	const mergedIps = canMergeIpSets
+		? new Set<string>([...(base.ips ?? []), ...(next.ips ?? [])])
+		: null;
 	const baseTs = Date.parse(base.lastActivityAt || '1970-01-01T00:00:00.000Z');
 	const nextTs = Date.parse(next.lastActivityAt || '1970-01-01T00:00:00.000Z');
 	const mostRecent = nextTs > baseTs ? next : base;
@@ -71,8 +81,12 @@ function combineActivityRecords(
 		totalAdds: base.totalAdds + next.totalAdds,
 		totalRemoves: base.totalRemoves + next.totalRemoves,
 		lastActivityAt: mostRecent.lastActivityAt,
-		uniqueServiceCount: base.uniqueServiceCount + next.uniqueServiceCount,
-		uniqueIpCount: base.uniqueIpCount + next.uniqueIpCount
+		uniqueServiceCount: mergedServiceIds
+			? mergedServiceIds.size
+			: base.uniqueServiceCount + next.uniqueServiceCount,
+		uniqueIpCount: mergedIps ? mergedIps.size : base.uniqueIpCount + next.uniqueIpCount,
+		serviceIds: mergedServiceIds ? [...mergedServiceIds] : undefined,
+		ips: mergedIps ? [...mergedIps] : undefined
 	};
 }
 

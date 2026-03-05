@@ -69,10 +69,56 @@ describe('/verify load', () => {
 			cookies
 		});
 		const result = await load(event as never);
+		if (!result) {
+			throw new Error('Expected verify load to return data');
+		}
 
 		expect(result.clientIp).toBe('203.0.113.10');
 		expect(result.services).toEqual([{ id: 'grafana', name: 'Grafana' }]);
 		expect(result.entries).toEqual([{ id: 1 }]);
 		expect(result.csrfToken).toBe('csrf-123');
+	});
+
+	it('returns no services when user has no allowed services', async () => {
+		requireAuthUserMock.mockResolvedValue({
+			id: 'test-admin',
+			email: 'admin@example.com',
+			groups: ['admin']
+		});
+		resolveClientIpMock.mockReturnValue('203.0.113.10');
+		getAllowedServiceIdsForGroupsMock.mockReturnValue([]);
+		getServiceDefinitionsMock.mockResolvedValue([
+			{ id: 'grafana', name: 'Grafana' },
+			{ id: 'jellyfin', name: 'Jellyfin' }
+		]);
+		listAllowlistEntriesForUserMock.mockReturnValue([{ id: 1 }]);
+		issueCsrfTokenMock.mockReturnValue('csrf-123');
+
+		const cookies = createCookieStore();
+		const event = createRequestEvent({
+			pathname: 'http://localhost/verify',
+			session: { user: { id: 'test-admin', groups: ['admin'] } },
+			cookies
+		});
+		const result = await load(event as never);
+		if (!result) {
+			throw new Error('Expected verify load to return data');
+		}
+
+		expect(result.clientIp).toBe('203.0.113.10');
+		expect(result.services).toEqual([]);
+		expect(result.entries).toEqual([{ id: 1 }]);
+		expect(result.csrfToken).toBe('csrf-123');
+	});
+
+	it('handles authentication failure', async () => {
+		requireAuthUserMock.mockRejectedValue(new Error('Unauthenticated'));
+
+		const event = createRequestEvent({
+			pathname: 'http://localhost/verify',
+			cookies: createCookieStore()
+		});
+
+		await expect(load(event as never)).rejects.toThrow('Unauthenticated');
 	});
 });

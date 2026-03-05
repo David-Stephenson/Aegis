@@ -25,8 +25,10 @@ describe('policy checks', () => {
 
 		const allowed = canUserAccessService({ id: 'u1', groups: ['admin'] }, 'grafana');
 		const denied = canUserAccessService({ id: 'u2', groups: ['dev'] }, 'grafana');
+		const deniedDifferentService = canUserAccessService({ id: 'u3', groups: ['admin'] }, 'prometheus');
 
 		expect(allowed).toBe(true);
 		expect(denied).toBe(false);
+		expect(deniedDifferentService).toBe(false);
 	});
 });

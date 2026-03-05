@@ -32,7 +32,8 @@
 
 	let { children } = $props();
 
-	const isActive = (href: string, pathname: string) => pathname === href;
+	const isActive = (href: string, pathname: string) =>
+		pathname === href || pathname.startsWith(`${href}/`);
 </script>
 
 <main class="mx-auto max-w-7xl p-6">

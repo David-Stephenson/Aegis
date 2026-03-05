@@ -65,7 +65,7 @@ describe('listAuthentikUsers', () => {
 				username: 'alice',
 				email: 'alice@example.com',
 				name: null,
-				isActive: true,
+				isActive: false,
 				groups: ['admin']
 			},
 			{
@@ -73,12 +73,14 @@ describe('listAuthentikUsers', () => {
 				username: 'bob',
 				email: 'bob@example.com',
 				name: null,
-				isActive: true,
+				isActive: false,
 				groups: ['dev']
 			}
 		]);
 	});
+});
 
+describe('listAuthentikUsersSafely', () => {
 	it('returns warning and empty users when Authentik request fails', async () => {
 		const fetchMock: typeof fetch = async () => new Response('denied', { status: 401 });
 

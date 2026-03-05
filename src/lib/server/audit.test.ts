@@ -43,6 +43,7 @@ describe('audit', () => {
 
 		expect(runMock).toHaveBeenCalledTimes(1);
 		const args = runMock.mock.calls[0] ?? [];
+		expect(args).toHaveLength(10);
 		expect(args[0]).toBe('corr-1');
 		expect(args[3]).toBe(JSON.stringify(['admin']));
 	});
@@ -86,9 +87,10 @@ describe('audit', () => {
 				createdAt: '2026-01-02T00:00:00.000Z'
 			}
 		];
-		const { listRecentAuditEvents } = await loadAuditModule([{ name: 'groups_json' }], rows);
+		const { listRecentAuditEvents, allMock } = await loadAuditModule([{ name: 'groups_json' }], rows);
 
 		const result = listRecentAuditEvents(10);
 		expect(result).toEqual(rows);
+		expect(allMock).toHaveBeenCalledWith(10);
 	});
 });

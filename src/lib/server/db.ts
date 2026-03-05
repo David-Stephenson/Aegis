@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS service_overrides (
   description TEXT,
   icon TEXT,
   sort_order INTEGER NOT NULL DEFAULT 1000,
-  enabled INTEGER NOT NULL DEFAULT 1,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

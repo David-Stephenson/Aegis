@@ -1,4 +1,5 @@
 <script lang="ts">
+	import X from 'lucide-svelte/icons/x';
 	import Check from 'lucide-svelte/icons/check';
 	import Settings from 'lucide-svelte/icons/settings';
 
@@ -22,15 +23,8 @@
 
 	let { data } = $props<{ data: PageData }>();
 	const isAdmin = $derived(data.user.groups.includes('admin'));
-
-	function getFailedResults(): Result[] {
-		return data.results.filter((result: Result) => result.status === 'failed');
-	}
-
-	function isAllFailed(): boolean {
-		const failedResults = getFailedResults();
-		return data.results.length > 0 && failedResults.length === data.results.length;
-	}
+	const failedResults = $derived(data.results.filter((result: Result) => result.status === 'failed'));
+	const allFailed = $derived(data.results.length > 0 && failedResults.length === data.results.length);
 </script>
 
 <main class="relative mx-auto grid min-h-screen max-w-3xl place-items-center p-6">
@@ -43,14 +37,22 @@
 		</a>
 	{/if}
 	<div class="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-		<div
-			class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"
-			aria-hidden="true">
-			<Check class="h-9 w-9" strokeWidth={2.5} />
-		</div>
+		{#if allFailed}
+			<div
+				class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 text-rose-700"
+				aria-hidden="true">
+				<X class="h-9 w-9" strokeWidth={2.5} />
+			</div>
+		{:else}
+			<div
+				class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"
+				aria-hidden="true">
+				<Check class="h-9 w-9" strokeWidth={2.5} />
+			</div>
+		{/if}
 
 		<h1 class="mt-6 text-3xl font-semibold text-slate-900">
-			{#if isAllFailed()}
+			{#if allFailed}
 				Could not update the allow list.
 			{:else}
 				Added <span class="font-mono text-2xl">{data.clientIp}</span> to the allow list.
@@ -61,11 +63,11 @@
 			Signed in as <span class="font-medium">{data.user.email ?? data.user.name ?? data.user.id}</span>
 		</p>
 
-		{#if getFailedResults().length > 0}
+		{#if failedResults.length > 0}
 			<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-900">
 				Some services could not be updated:
 				<ul class="mt-2 list-inside list-disc">
-					{#each getFailedResults() as result}
+					{#each failedResults as result}
 						<li>{result.serviceName} ({result.serviceId})</li>
 					{/each}
 				</ul>

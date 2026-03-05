@@ -50,6 +50,7 @@ export function listAllowlistEntriesForUser(userId: string): AllowlistEntry[] {
 }
 
 export function listAllowlistEntries(limit = 1000): AllowlistEntry[] {
+	const normalizedLimit = Number.isInteger(limit) && limit > 0 ? limit : 1000;
 	return db
 		.prepare(
 			`SELECT
@@ -64,5 +65,5 @@ export function listAllowlistEntries(limit = 1000): AllowlistEntry[] {
     ORDER BY datetime(updated_at) DESC, id DESC
     LIMIT ?`
 		)
-		.all(limit) as AllowlistEntry[];
+		.all(normalizedLimit) as AllowlistEntry[];
 }

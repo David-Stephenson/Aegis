@@ -22,6 +22,7 @@ const authentikListSchema = z.object({
 	results: z.array(z.unknown()),
 	next: z.string().nullable().optional()
 });
+const AUTHENTIK_REQUEST_TIMEOUT_MS = 10_000;
 
 export class AuthentikApiError extends Error {
 	readonly status?: number;
@@ -66,7 +67,8 @@ export function normalizeAuthentikUser(raw: unknown): AuthentikDirectoryUser | n
 		username: user.username?.trim() || id,
 		email: user.email?.trim() || null,
 		name: user.name?.trim() || null,
-		isActive: user.is_active ?? true,
+		// Prefer safe defaults for missing fields from external APIs.
+		isActive: user.is_active ?? false,
 		groups: normalizeGroupNames(user.groups_obj, user.groups)
 	};
 }
@@ -75,13 +77,28 @@ async function fetchPage(
 	pathWithQuery: string,
 	fetchImpl: typeof fetch
 ): Promise<{ results: unknown[]; next: string | null }> {
-	const response = await fetchImpl(pathWithQuery, {
-		method: 'GET',
-		headers: {
-			Authorization: `Bearer ${appEnv.AUTHENTIK_API_TOKEN}`,
-			'Content-Type': 'application/json'
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), AUTHENTIK_REQUEST_TIMEOUT_MS);
+	let response: Response;
+	try {
+		response = await fetchImpl(pathWithQuery, {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${appEnv.AUTHENTIK_API_TOKEN}`,
+				'Content-Type': 'application/json'
+			},
+			signal: controller.signal
+		});
+	} catch (caught) {
+		if (caught instanceof Error && caught.name === 'AbortError') {
+			throw new AuthentikApiError(
+				`Authentik API request timed out after ${AUTHENTIK_REQUEST_TIMEOUT_MS}ms`
+			);
 		}
-	});
+		throw caught;
+	} finally {
+		clearTimeout(timeoutId);
+	}
 	if (!response.ok) {
 		const body = await response.text();
 		throw new AuthentikApiError(

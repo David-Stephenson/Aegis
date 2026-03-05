@@ -56,18 +56,6 @@ describe('admin-reports', () => {
 	it('normalizes allowlist history ordering and action types', () => {
 		allMock.mockReturnValue([
 			{
-				id: 2,
-				correlationId: 'corr-2',
-				userId: 'u-1',
-				userEmail: null,
-				serviceId: 'grafana',
-				ip: '203.0.113.10',
-				action: 'allowlist_add',
-				outcome: 'success',
-				detail: null,
-				createdAt: '2026-01-02T00:00:00.000Z'
-			},
-			{
 				id: 1,
 				correlationId: 'corr-1',
 				userId: 'u-1',
@@ -78,6 +66,18 @@ describe('admin-reports', () => {
 				outcome: 'success',
 				detail: null,
 				createdAt: '2026-01-01T00:00:00.000Z'
+			},
+			{
+				id: 2,
+				correlationId: 'corr-2',
+				userId: 'u-1',
+				userEmail: null,
+				serviceId: 'grafana',
+				ip: '203.0.113.10',
+				action: 'allowlist_add',
+				outcome: 'success',
+				detail: null,
+				createdAt: '2026-01-02T00:00:00.000Z'
 			}
 		]);
 

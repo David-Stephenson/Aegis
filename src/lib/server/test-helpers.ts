@@ -12,25 +12,80 @@ type MockSession = {
 };
 
 type CookieJar = Record<string, string>;
+type CookieSetOptions = Parameters<Cookies['set']>[2];
+type CookieDeleteOptions = Parameters<Cookies['delete']>[1];
+type StoredCookie = {
+	name: string;
+	value: string;
+	options?: CookieSetOptions;
+};
+
+function cookieStorageKey(name: string, options?: { path?: string; domain?: string }): string {
+	return `${name}|${options?.path ?? ''}|${options?.domain ?? ''}`;
+}
+
+function serializeCookie(name: string, value: string, options?: CookieSetOptions): string {
+	const parts = [`${name}=${value}`];
+	if (options?.path) {
+		parts.push(`Path=${options.path}`);
+	}
+	if (options?.domain) {
+		parts.push(`Domain=${options.domain}`);
+	}
+	if (options?.httpOnly) {
+		parts.push('HttpOnly');
+	}
+	if (options?.secure) {
+		parts.push('Secure');
+	}
+	if (options?.sameSite) {
+		const sameSite =
+			typeof options.sameSite === 'string'
+				? options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1)
+				: options.sameSite;
+		if (typeof sameSite === 'string') {
+			parts.push(`SameSite=${sameSite}`);
+		}
+	}
+	if (typeof options?.maxAge === 'number') {
+		parts.push(`Max-Age=${options.maxAge}`);
+	}
+	if (options?.expires) {
+		parts.push(`Expires=${options.expires.toUTCString()}`);
+	}
+	return parts.join('; ');
+}
 
 export function createCookieStore(seed: CookieJar = {}): Cookies {
-	const jar = new Map(Object.entries(seed));
+	const jar = new Map<string, StoredCookie>();
+	for (const [name, value] of Object.entries(seed)) {
+		jar.set(cookieStorageKey(name), { name, value });
+	}
 
 	return {
 		get(name: string): string | undefined {
-			return jar.get(name);
+			const matches = [...jar.values()].filter((cookie) => cookie.name === name);
+			return matches.at(-1)?.value;
 		},
 		getAll(): Array<{ name: string; value: string }> {
-			return [...jar.entries()].map(([name, value]) => ({ name, value }));
+			return [...jar.values()].map((cookie) => ({ name: cookie.name, value: cookie.value }));
 		},
-		set(name: string, value: string): void {
-			jar.set(name, value);
+		set(name: string, value: string, options?: CookieSetOptions): void {
+			jar.set(cookieStorageKey(name, options), { name, value, options });
 		},
-		delete(name: string): void {
-			jar.delete(name);
+		delete(name: string, options?: CookieDeleteOptions): void {
+			if (options?.path || options?.domain) {
+				jar.delete(cookieStorageKey(name, options));
+				return;
+			}
+			for (const [key, cookie] of jar.entries()) {
+				if (cookie.name === name) {
+					jar.delete(key);
+				}
+			}
 		},
-		serialize(name: string, value: string): string {
-			return `${name}=${value}`;
+		serialize(name: string, value: string, options?: CookieSetOptions): string {
+			return serializeCookie(name, value, options);
 		}
 	} as Cookies;
 }
