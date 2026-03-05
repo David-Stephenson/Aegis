@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import net from 'node:net';
 import { error, fail } from '@sveltejs/kit';
 import { z } from 'zod';
 import { removeAllowlistEntry } from '$lib/server/allowlist-store';
@@ -10,7 +11,7 @@ import type { Actions } from './$types';
 
 const revokeAllowlistEntrySchema = z.object({
 	serviceId: z.string().min(1),
-	ip: z.string().min(1)
+	ip: z.string().refine((value) => net.isIP(value) > 0, { message: 'Invalid IP address' })
 });
 
 export const actions: Actions = {

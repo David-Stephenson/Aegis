@@ -20,16 +20,17 @@
 
 	<div class="mt-4 overflow-x-auto">
 		<table class="min-w-full text-left text-sm">
+			<caption class="sr-only">Directory users with merged allowlist activity statistics</caption>
 			<thead>
 				<tr class="border-b border-slate-200 text-slate-600">
-					<th class="py-2 pr-3">User</th>
-					<th class="py-2 pr-3">Source</th>
-					<th class="py-2 pr-3">Groups</th>
-					<th class="py-2 pr-3">Adds</th>
-					<th class="py-2 pr-3">Removes</th>
-					<th class="py-2 pr-3">Services</th>
-					<th class="py-2 pr-3">IPs</th>
-					<th class="py-2 pr-3">Last activity</th>
+					<th scope="col" class="py-2 pr-3">User</th>
+					<th scope="col" class="py-2 pr-3">Source</th>
+					<th scope="col" class="py-2 pr-3">Groups</th>
+					<th scope="col" class="py-2 pr-3">Adds</th>
+					<th scope="col" class="py-2 pr-3">Removes</th>
+					<th scope="col" class="py-2 pr-3">Services</th>
+					<th scope="col" class="py-2 pr-3">IPs</th>
+					<th scope="col" class="py-2 pr-3">Last activity</th>
 				</tr>
 			</thead>
 			<tbody>

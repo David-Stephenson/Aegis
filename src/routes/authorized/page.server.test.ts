@@ -64,6 +64,9 @@ describe('/authorized load', () => {
 
 		const event = createRequestEvent({ pathname: 'http://localhost/authorized' });
 		const result = await load(event as never);
+		if (!result) {
+			throw new Error('Expected authorized load to return data');
+		}
 
 		expect(result.results).toEqual([
 			{
@@ -73,6 +76,8 @@ describe('/authorized load', () => {
 			}
 		]);
 		expect(allowlistIpMock).not.toHaveBeenCalled();
+		expect(upsertAllowlistEntryMock).not.toHaveBeenCalled();
+		expect(writeAuditEventMock).not.toHaveBeenCalled();
 	});
 
 	it('returns failed status when caddy update fails', async () => {
@@ -91,6 +96,9 @@ describe('/authorized load', () => {
 
 		const event = createRequestEvent({ pathname: 'http://localhost/authorized' });
 		const result = await load(event as never);
+		if (!result) {
+			throw new Error('Expected authorized load to return data');
+		}
 
 		expect(result.results[0]).toMatchObject({
 			serviceId: 'grafana',

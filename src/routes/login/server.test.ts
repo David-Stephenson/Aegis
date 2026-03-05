@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET, POST } from './+server';
 import { createRequestEvent } from '$lib/server/test-helpers';
 
@@ -10,6 +10,10 @@ vi.mock('../../auth', () => ({
 }));
 
 describe('/login handlers', () => {
+	beforeEach(() => {
+		signInMock.mockReset();
+	});
+
 	it('GET redirects to root', async () => {
 		const event = createRequestEvent({ pathname: 'http://localhost/login' });
 		await expect(GET(event as never)).rejects.toMatchObject({ status: 302, location: '/' });

@@ -41,8 +41,8 @@ export function listUserAllowlistActivityStats(limit = 5000): UserAllowlistActiv
 		string,
 		UserAllowlistActivity & {
 			latestEventId: number;
-			serviceIds: Set<string>;
-			ips: Set<string>;
+			serviceSet: Set<string>;
+			ipSet: Set<string>;
 		}
 	>();
 
@@ -59,16 +59,16 @@ export function listUserAllowlistActivityStats(limit = 5000): UserAllowlistActiv
 				uniqueServiceCount: 0,
 				uniqueIpCount: 0,
 				latestEventId: row.id,
-				serviceIds: new Set([row.serviceId]),
-				ips: new Set([row.ip])
+				serviceSet: new Set([row.serviceId]),
+				ipSet: new Set([row.ip])
 			});
 			continue;
 		}
 
 		existing.totalAdds += row.action === 'allowlist_add' ? 1 : 0;
 		existing.totalRemoves += row.action === 'allowlist_remove' ? 1 : 0;
-		existing.serviceIds.add(row.serviceId);
-		existing.ips.add(row.ip);
+		existing.serviceSet.add(row.serviceId);
+		existing.ipSet.add(row.ip);
 		if (row.id > existing.latestEventId) {
 			existing.latestEventId = row.id;
 			existing.userId = row.userId;
@@ -84,8 +84,10 @@ export function listUserAllowlistActivityStats(limit = 5000): UserAllowlistActiv
 			totalAdds: bucket.totalAdds,
 			totalRemoves: bucket.totalRemoves,
 			lastActivityAt: bucket.lastActivityAt,
-			uniqueServiceCount: bucket.serviceIds.size,
-			uniqueIpCount: bucket.ips.size
+			uniqueServiceCount: bucket.serviceSet.size,
+			uniqueIpCount: bucket.ipSet.size,
+			serviceIds: [...bucket.serviceSet],
+			ips: [...bucket.ipSet]
 		}))
 		.sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
 }

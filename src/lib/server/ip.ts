@@ -4,6 +4,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { appEnv } from '$lib/server/env';
 
 type CidrTuple = [ipaddr.IPv4 | ipaddr.IPv6, number];
+let warnedAboutMissingTrustedProxies = false;
 
 function normalizeIp(value: string): string | null {
 	const trimmed = value.trim();
@@ -52,11 +53,14 @@ export function resolveClientIpFromInputs(
 	// Security check: If X-Forwarded-For is present but no proxies are trusted,
 	// we must ignore the header to prevent spoofing.
 	if (chain.length > 0 && trustedCidrs.length === 0) {
-		console.warn(
-			'[SECURITY WARNING] X-Forwarded-For header present but TRUSTED_PROXY_CIDRS is empty. ' +
-				'The application is ignoring the header to prevent IP spoofing. ' +
-				'Please configure TRUSTED_PROXY_CIDRS in your environment if you are behind a proxy.'
-		);
+		if (!warnedAboutMissingTrustedProxies) {
+			warnedAboutMissingTrustedProxies = true;
+			console.warn(
+				'[SECURITY WARNING] X-Forwarded-For header present but TRUSTED_PROXY_CIDRS is empty. ' +
+					'The application is ignoring the header to prevent IP spoofing. ' +
+					'Please configure TRUSTED_PROXY_CIDRS in your environment if you are behind a proxy.'
+			);
+		}
 		const direct = normalizeIp(directAddress);
 		if (!direct) {
 			throw new Error('Unable to resolve client IP address');

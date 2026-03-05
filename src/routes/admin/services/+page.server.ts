@@ -21,8 +21,9 @@ export const actions: Actions = {
 		}
 
 		const formData = await event.request.formData();
+		const serviceId = formData.get('serviceId')?.toString().trim() ?? '';
 		const parsed = updateServiceSchema.safeParse({
-			serviceId: formData.get('serviceId'),
+			serviceId,
 			displayName: formData.get('displayName')?.toString().trim() ?? '',
 			description: formData.get('description')?.toString().trim() ?? '',
 			icon: formData.get('icon')?.toString().trim() ?? '',

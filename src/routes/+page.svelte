@@ -7,7 +7,7 @@
 	let authErrorMessage = $derived.by(() => {
 		const error = $page.url.searchParams.get('error');
 		if (error === 'auth_login_failed') {
-			return 'Sign-in failed. Check Authentik issuer/client settings and verify the provider well-known endpoint is reachable.';
+			return 'Sign-in failed. Please try again or contact support.';
 		}
 		return '';
 	});
@@ -173,7 +173,11 @@
 					Use your organization identity provider to continue.
 				</p>
 				{#if authErrorMessage}
-					<p class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+					<p
+						role="alert"
+						aria-live="assertive"
+						aria-atomic="true"
+						class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
 						{authErrorMessage}
 					</p>
 				{/if}

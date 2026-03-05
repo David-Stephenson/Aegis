@@ -69,6 +69,20 @@ async function seedHttpConfig(url: string): Promise<void> {
 	}
 }
 
+function isDockerUnavailableError(caught: unknown): boolean {
+	if (!(caught instanceof Error)) {
+		return false;
+	}
+	const message = caught.message.toLowerCase();
+	return (
+		message.includes('docker') &&
+		(message.includes('not found') ||
+			message.includes('command not found') ||
+			message.includes('cannot connect to the docker daemon') ||
+			message.includes('is the docker daemon running'))
+	);
+}
+
 (hasDocker ? describe : describe.skip)('caddy-api docker integration', () => {
 	let integrationReady = false;
 
@@ -95,8 +109,12 @@ async function seedHttpConfig(url: string): Promise<void> {
 			await waitForAdminApi(baseUrl, 15_000);
 			await seedHttpConfig(baseUrl);
 			integrationReady = true;
-		} catch {
-			integrationReady = false;
+		} catch (caught) {
+			if (isDockerUnavailableError(caught)) {
+				integrationReady = false;
+				return;
+			}
+			throw caught;
 		}
 	}, 30_000);
 

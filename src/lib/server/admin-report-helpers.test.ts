@@ -53,7 +53,9 @@ describe('mergeUsersWithActivity', () => {
 				totalRemoves: 0,
 				lastActivityAt: '2026-01-01T00:00:00.000Z',
 				uniqueServiceCount: 1,
-				uniqueIpCount: 1
+				uniqueIpCount: 1,
+				serviceIds: ['grafana'],
+				ips: ['203.0.113.10']
 			},
 			{
 				userId: 'new-subject-id',
@@ -62,7 +64,9 @@ describe('mergeUsersWithActivity', () => {
 				totalRemoves: 1,
 				lastActivityAt: '2026-01-02T00:00:00.000Z',
 				uniqueServiceCount: 1,
-				uniqueIpCount: 1
+				uniqueIpCount: 1,
+				serviceIds: ['grafana'],
+				ips: ['203.0.113.11']
 			}
 		]);
 
@@ -71,6 +75,8 @@ describe('mergeUsersWithActivity', () => {
 		expect(users[0]?.email).toBe('david@example.com');
 		expect(users[0]?.activity.totalAdds).toBe(3);
 		expect(users[0]?.activity.totalRemoves).toBe(1);
+		expect(users[0]?.activity.uniqueServiceCount).toBe(1);
+		expect(users[0]?.activity.uniqueIpCount).toBe(2);
 	});
 });
 

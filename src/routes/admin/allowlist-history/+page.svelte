@@ -2,14 +2,15 @@
 	import type { LayoutData } from '../$types';
 
 	type AllowlistHistoryEvent = LayoutData['allowlistHistory'][number];
+	const ALL_SENTINEL = '__ALL__';
 
 	let { data } = $props<{ data: LayoutData }>();
 	let allowlistHistory = $derived(data.allowlistHistory as AllowlistHistoryEvent[]);
 
-	let userFilter = $state('all');
-	let serviceFilter = $state('all');
-	let actionFilter = $state('all');
-	let outcomeFilter = $state('all');
+	let userFilter = $state(ALL_SENTINEL);
+	let serviceFilter = $state(ALL_SENTINEL);
+	let actionFilter = $state(ALL_SENTINEL);
+	let outcomeFilter = $state(ALL_SENTINEL);
 	let searchFilter = $state('');
 
 	let serviceFilterOptions = $derived(
@@ -23,10 +24,10 @@
 	let filteredHistory = $derived(
 		allowlistHistory.filter((event) => {
 			const userLabel = event.userEmail ?? event.userId;
-			const matchesUser = userFilter === 'all' || userLabel === userFilter;
-			const matchesService = serviceFilter === 'all' || event.serviceId === serviceFilter;
-			const matchesAction = actionFilter === 'all' || event.action === actionFilter;
-			const matchesOutcome = outcomeFilter === 'all' || event.outcome === outcomeFilter;
+			const matchesUser = userFilter === ALL_SENTINEL || userLabel === userFilter;
+			const matchesService = serviceFilter === ALL_SENTINEL || event.serviceId === serviceFilter;
+			const matchesAction = actionFilter === ALL_SENTINEL || event.action === actionFilter;
+			const matchesOutcome = outcomeFilter === ALL_SENTINEL || event.outcome === outcomeFilter;
 			const searchTerm = searchFilter.trim().toLowerCase();
 			const matchesSearch =
 				searchTerm.length === 0 ||
@@ -49,7 +50,7 @@
 		<label class="text-sm">
 			<span class="text-slate-600">User</span>
 			<select bind:value={userFilter} class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
-				<option value="all">All users</option>
+				<option value={ALL_SENTINEL}>All users</option>
 				{#each userFilterOptions as userOption}
 					<option value={userOption}>{userOption}</option>
 				{/each}
@@ -58,7 +59,7 @@
 		<label class="text-sm">
 			<span class="text-slate-600">Service</span>
 			<select bind:value={serviceFilter} class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
-				<option value="all">All services</option>
+				<option value={ALL_SENTINEL}>All services</option>
 				{#each serviceFilterOptions as serviceOption}
 					<option value={serviceOption}>{serviceOption}</option>
 				{/each}
@@ -67,7 +68,7 @@
 		<label class="text-sm">
 			<span class="text-slate-600">Action</span>
 			<select bind:value={actionFilter} class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
-				<option value="all">All actions</option>
+				<option value={ALL_SENTINEL}>All actions</option>
 				<option value="allowlist_add">allowlist_add</option>
 				<option value="allowlist_remove">allowlist_remove</option>
 			</select>
@@ -75,7 +76,7 @@
 		<label class="text-sm">
 			<span class="text-slate-600">Outcome</span>
 			<select bind:value={outcomeFilter} class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
-				<option value="all">All outcomes</option>
+				<option value={ALL_SENTINEL}>All outcomes</option>
 				<option value="success">success</option>
 				<option value="denied">denied</option>
 				<option value="error">error</option>

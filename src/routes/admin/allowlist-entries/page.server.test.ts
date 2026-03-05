@@ -100,5 +100,6 @@ describe('/admin/allowlist-entries actions', () => {
 		const result = await actions.revokeAllowlistEntry(event as never);
 		expect(result).toMatchObject({ status: 502 });
 		expect(writeAuditEventMock).toHaveBeenCalled();
+		expect(removeAllowlistEntryMock).not.toHaveBeenCalled();
 	});
 });
