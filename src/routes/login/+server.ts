@@ -7,6 +7,11 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async (event) => {
-	await signIn(event);
-	return new Response(null, { status: 204 });
+	try {
+		await signIn(event);
+		return new Response(null, { status: 204 });
+	} catch (caught) {
+		console.error('[auth] login failed', caught);
+		throw redirect(303, '/?error=auth_login_failed');
+	}
 };

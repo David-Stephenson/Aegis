@@ -10,7 +10,7 @@ export const load: PageServerLoad = async (event) => {
 	const user = await requireAuthUser(event);
 	const clientIp = resolveClientIp(event);
 	const allowedServiceIds = new Set(getAllowedServiceIdsForGroups(user.groups));
-	const services = getServiceDefinitions().filter((service) => allowedServiceIds.has(service.id));
+	const services = (await getServiceDefinitions()).filter((service) => allowedServiceIds.has(service.id));
 	const entries = listAllowlistEntriesForUser(user.id);
 	const csrfToken = issueCsrfToken(event.cookies);
 

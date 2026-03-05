@@ -1,8 +1,16 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 
 	let fireCanvas: HTMLCanvasElement | undefined;
 	let firePanel: HTMLDivElement | undefined;
+	let authErrorMessage = $derived.by(() => {
+		const error = $page.url.searchParams.get('error');
+		if (error === 'auth_login_failed') {
+			return 'Sign-in failed. Please try again or contact support.';
+		}
+		return '';
+	});
 
 	onMount(() => {
 		if (!fireCanvas || !firePanel) {
@@ -122,11 +130,11 @@
 	});
 </script>
 
-<main class="min-h-screen bg-white">
-	<section class="grid min-h-screen w-full overflow-hidden bg-white md:grid-cols-[392px_1fr]">
+<main class="min-h-screen bg-slate-50">
+	<section class="grid min-h-screen w-full overflow-hidden bg-slate-50 lg:grid-cols-[420px_1fr]">
 		<div
 			bind:this={firePanel}
-			class="relative hidden min-h-screen md:block"
+			class="relative hidden min-h-screen lg:block"
 			style="
 				background-color: #2a0904;
 				background-image:
@@ -139,30 +147,54 @@
 				background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
 			">
 			<canvas bind:this={fireCanvas} class="pointer-events-none absolute inset-0 z-0 opacity-90"></canvas>
-			<div class="absolute inset-0 z-10 bg-gradient-to-b from-black/5 via-transparent to-black/35"></div>
+			<div class="absolute inset-0 z-10 bg-gradient-to-b from-black/5 via-black/5 to-black/45"></div>
+			<div class="absolute inset-x-8 top-8 z-20 text-white/90">
+				<p class="text-sm font-medium tracking-[0.22em] uppercase">Aegis Access</p>
+			</div>
 			<div class="absolute bottom-8 left-8 right-8 z-20 text-white">
-				<p class="text-3xl font-semibold leading-tight">Aegis</p>
+				<p class="text-3xl font-semibold leading-tight">Secure edge controls</p>
+				<p class="mt-2 max-w-xs text-sm text-amber-100/90">
+					Verify and authorize trusted requests through a single managed login.
+				</p>
 			</div>
 		</div>
 
-		<div class="flex min-h-screen items-center justify-center p-8 md:p-16">
-			<div class="w-full max-w-md">
-				<h1 class="text-center text-4xl font-semibold text-slate-900">Welcome back</h1>
-				<p class="mt-3 text-center text-sm text-slate-500">
-					Sign in with Authentik to manage IP allowlist access.
+		<div
+			class="relative flex min-h-screen items-center justify-center p-6 sm:p-10 lg:p-16"
+			style="
+				background-image:
+					radial-gradient(circle at 0% 0%, rgba(15, 23, 42, 0.08), transparent 42%),
+					radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.08), transparent 38%);
+			">
+			<div class="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white/95 p-8 shadow-xl shadow-slate-900/5 backdrop-blur sm:p-10">
+				<p class="text-sm font-medium tracking-wide text-slate-500">Welcome back</p>
+				<h1 class="mt-2 text-3xl font-semibold text-slate-900 sm:text-4xl">Sign in to Aegis</h1>
+				<p class="mt-3 text-sm leading-relaxed text-slate-600">
+					Use your organization identity provider to continue.
 				</p>
+				{#if authErrorMessage}
+					<p
+						role="alert"
+						aria-live="assertive"
+						aria-atomic="true"
+						class="mt-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+						{authErrorMessage}
+					</p>
+				{/if}
 
-				<form class="mt-10 space-y-5" method="POST" action="/login">
+				<form class="mt-8 space-y-4" method="POST" action="/login">
 					<input type="hidden" name="providerId" value="authentik" />
 					<input type="hidden" name="redirectTo" value="/authorized" />
 					<button
-						class="w-full rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+						class="group flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
 						type="submit">
 						Continue with Authentik
+						<span class="inline-block transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
 					</button>
+					<p class="text-center text-xs text-slate-500">
+						You will be redirected securely and returned after authentication.
+					</p>
 				</form>
-
-				<p class="mt-6 text-center text-xs text-slate-500">You will be redirected to your Authentik provider.</p>
 			</div>
 		</div>
 	</section>

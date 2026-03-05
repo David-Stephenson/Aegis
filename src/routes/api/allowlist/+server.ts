@@ -23,7 +23,7 @@ export const POST: RequestHandler = async (event) => {
 	assertRateLimit(`${user.id}:allowlist`, 15, 60_000);
 
 	const payload = requestSchema.parse(await event.request.json());
-	const service = getServiceById(payload.serviceId);
+	const service = await getServiceById(payload.serviceId);
 	const clientIp = resolveClientIp(event);
 	const correlationId = crypto.randomUUID();
 
