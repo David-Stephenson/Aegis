@@ -108,7 +108,6 @@ export function mergeUsersWithActivity(
 	}
 
 	const merged: DirectoryUser[] = [];
-	const consumedUserIds = new Set<string>();
 
 	for (const liveUser of liveUsers) {
 		const matchedById = activityByUserId.get(liveUser.id);
@@ -116,26 +115,9 @@ export function mergeUsersWithActivity(
 			? activityByEmail.get(normalizeEmail(liveUser.email) as string)
 			: undefined;
 		const activity = matchedById ?? matchedByEmail ?? emptyActivity(liveUser.id, liveUser.email);
-		consumedUserIds.add(activity.userId);
 		merged.push({
 			...liveUser,
 			source: 'live',
-			activity
-		});
-	}
-
-	for (const activity of collapsedActivity) {
-		if (consumedUserIds.has(activity.userId)) {
-			continue;
-		}
-		merged.push({
-			id: activity.userId,
-			username: activity.userEmail ?? activity.userId,
-			email: activity.userEmail,
-			name: activity.userEmail,
-			isActive: false,
-			groups: [],
-			source: 'local-only',
 			activity
 		});
 	}

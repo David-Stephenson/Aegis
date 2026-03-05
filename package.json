@@ -29,6 +29,7 @@
 	"dependencies": {
 		"@auth/core": "^0.41.1",
 		"@auth/sveltekit": "^1.11.1",
+		"@goauthentik/api": "^2025.6.3-1751754396",
 		"ipaddr.js": "^2.3.0",
 		"lucide-svelte": "^0.576.0",
 		"svelte-adapter-bun": "^1.0.1",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { listAuthentikUsers, listAuthentikUsersSafely, normalizeAuthentikUser } from '$lib/server/authentik-api';
 
 describe('normalizeAuthentikUser', () => {
@@ -29,36 +29,27 @@ describe('normalizeAuthentikUser', () => {
 
 describe('listAuthentikUsers', () => {
 	it('follows pagination and deduplicates users', async () => {
-		const seenUrls: string[] = [];
-		const fetchMock: typeof fetch = async (input) => {
-			const url = String(input);
-			seenUrls.push(url);
+		const listMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				results: [
+					{ pk: 'u-1', username: 'alice', email: 'alice@example.com', groups: ['admin'] },
+					{ pk: 'u-2', username: 'bob', email: 'bob@example.com', groups: ['dev'] }
+				],
+				pagination: { next: 2 }
+			})
+			.mockResolvedValueOnce({
+				results: [{ pk: 'u-2', username: 'bob', email: 'bob@example.com', groups: ['dev'] }],
+				pagination: { next: null }
+			});
 
-			if (url.includes('page=1')) {
-				return new Response(
-					JSON.stringify({
-						results: [
-							{ pk: 'u-1', username: 'alice', email: 'alice@example.com', groups: ['admin'] },
-							{ pk: 'u-2', username: 'bob', email: 'bob@example.com', groups: ['dev'] }
-						],
-						next: 'https://auth.example.com/api/v3/core/users/?page=2&page_size=200'
-					}),
-					{ status: 200 }
-				);
-			}
+		const users = await listAuthentikUsers(fetch, {
+			coreUsersList: listMock
+		});
 
-			return new Response(
-				JSON.stringify({
-					results: [{ pk: 'u-2', username: 'bob', email: 'bob@example.com', groups: ['dev'] }],
-					next: null
-				}),
-				{ status: 200 }
-			);
-		};
-
-		const users = await listAuthentikUsers(fetchMock);
-
-		expect(seenUrls).toHaveLength(2);
+		expect(listMock).toHaveBeenCalledTimes(2);
+		expect(listMock).toHaveBeenNthCalledWith(1, { page: 1, pageSize: 200, includeGroups: true });
+		expect(listMock).toHaveBeenNthCalledWith(2, { page: 2, pageSize: 200, includeGroups: true });
 		expect(users).toEqual([
 			{
 				id: 'u-1',
@@ -80,9 +71,9 @@ describe('listAuthentikUsers', () => {
 	});
 
 	it('returns warning and empty users when Authentik request fails', async () => {
-		const fetchMock: typeof fetch = async () => new Response('denied', { status: 401 });
-
-		const result = await listAuthentikUsersSafely(fetchMock);
+		const result = await listAuthentikUsersSafely(fetch, {
+			coreUsersList: vi.fn().mockRejectedValue(new Error('denied'))
+		});
 
 		expect(result.users).toEqual([]);
 		expect(result.warning).toContain('Failed to load live Authentik users');

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mergeUsersWithActivity, normalizeAllowlistHistory } from '$lib/server/admin-report-helpers';
 
 describe('mergeUsersWithActivity', () => {
-	it('merges live users with activity and preserves local-only users', () => {
+	it('merges live users with activity and excludes local-only users', () => {
 		const users = mergeUsersWithActivity(
 			[
 				{
@@ -36,15 +36,13 @@ describe('mergeUsersWithActivity', () => {
 			]
 		);
 
-		expect(users).toHaveLength(2);
-		expect(users[0]?.id).toBe('legacy-user');
-		expect(users[0]?.source).toBe('local-only');
-		expect(users[1]?.id).toBe('auth-1');
-		expect(users[1]?.source).toBe('live');
-		expect(users[1]?.activity.totalAdds).toBe(3);
+		expect(users).toHaveLength(1);
+		expect(users[0]?.id).toBe('auth-1');
+		expect(users[0]?.source).toBe('live');
+		expect(users[0]?.activity.totalAdds).toBe(3);
 	});
 
-	it('collapses local-only duplicates by email', () => {
+	it('returns empty list when no live users are present', () => {
 		const users = mergeUsersWithActivity([], [
 			{
 				userId: 'old-subject-id',
@@ -66,11 +64,7 @@ describe('mergeUsersWithActivity', () => {
 			}
 		]);
 
-		expect(users).toHaveLength(1);
-		expect(users[0]?.source).toBe('local-only');
-		expect(users[0]?.email).toBe('david@example.com');
-		expect(users[0]?.activity.totalAdds).toBe(3);
-		expect(users[0]?.activity.totalRemoves).toBe(1);
+		expect(users).toEqual([]);
 	});
 });
 

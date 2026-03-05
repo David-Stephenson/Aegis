@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Configuration, CoreApi, FetchError, ResponseError } from '@goauthentik/api';
 import { appEnv } from '$lib/server/env';
 import type { AuthentikDirectoryUser } from '$lib/server/admin-report-helpers';
 
@@ -8,6 +9,7 @@ const authentikUserSchema = z.object({
 	email: z.string().nullable().optional(),
 	name: z.string().nullable().optional(),
 	is_active: z.boolean().optional(),
+	isActive: z.boolean().optional(),
 	groups_obj: z
 		.array(
 			z.object({
@@ -15,12 +17,15 @@ const authentikUserSchema = z.object({
 			})
 		)
 		.optional(),
+	groupsObj: z
+		.array(
+			z.object({
+				name: z.string().optional()
+			})
+		)
+		.nullable()
+		.optional(),
 	groups: z.array(z.union([z.number(), z.string()])).optional()
-});
-
-const authentikListSchema = z.object({
-	results: z.array(z.unknown()),
-	next: z.string().nullable().optional()
 });
 
 export class AuthentikApiError extends Error {
@@ -66,47 +71,86 @@ export function normalizeAuthentikUser(raw: unknown): AuthentikDirectoryUser | n
 		username: user.username?.trim() || id,
 		email: user.email?.trim() || null,
 		name: user.name?.trim() || null,
-		isActive: user.is_active ?? true,
-		groups: normalizeGroupNames(user.groups_obj, user.groups)
+		isActive: user.is_active ?? user.isActive ?? true,
+		groups: normalizeGroupNames(user.groups_obj ?? user.groupsObj ?? undefined, user.groups)
 	};
+}
+
+type AuthentikUsersClient = {
+	coreUsersList: (params: { page: number; pageSize: number; includeGroups: boolean }) => Promise<{
+		results: unknown[];
+		pagination?: { next?: number | null } | null;
+	}>;
+};
+
+function createAuthentikUsersClient(fetchImpl: typeof fetch): AuthentikUsersClient {
+	const configuration = new Configuration({
+		basePath: normalizeBaseUrl(appEnv.AUTHENTIK_API_BASE_URL),
+		accessToken: appEnv.AUTHENTIK_API_TOKEN,
+		fetchApi: fetchImpl
+	});
+	return new CoreApi(configuration);
+}
+
+async function toAuthentikApiError(caught: unknown): Promise<AuthentikApiError> {
+	if (caught instanceof ResponseError) {
+		const body = await caught.response.text();
+		return new AuthentikApiError(
+			`Authentik API request failed (${caught.response.status}): ${body || 'No response body'}`,
+			caught.response.status
+		);
+	}
+	if (caught instanceof FetchError) {
+		const message = caught.cause instanceof Error ? caught.cause.message : String(caught.cause);
+		return new AuthentikApiError(`Authentik API request failed: ${message}`);
+	}
+	if (caught instanceof Error) {
+		return new AuthentikApiError(caught.message);
+	}
+	return new AuthentikApiError('Unknown Authentik API error');
+}
+
+function getNextPage(
+	pagination: {
+		next?: number | null;
+	} | null | undefined
+): number | null {
+	const next = pagination?.next;
+	return typeof next === 'number' && Number.isFinite(next) && next > 0 ? next : null;
 }
 
 async function fetchPage(
-	pathWithQuery: string,
-	fetchImpl: typeof fetch
-): Promise<{ results: unknown[]; next: string | null }> {
-	const response = await fetchImpl(pathWithQuery, {
-		method: 'GET',
-		headers: {
-			Authorization: `Bearer ${appEnv.AUTHENTIK_API_TOKEN}`,
-			'Content-Type': 'application/json'
-		}
-	});
-	if (!response.ok) {
-		const body = await response.text();
-		throw new AuthentikApiError(
-			`Authentik API request failed (${response.status}): ${body || 'No response body'}`,
-			response.status
-		);
+	page: number,
+	client: AuthentikUsersClient
+): Promise<{ results: unknown[]; nextPage: number | null }> {
+	try {
+		const payload = await client.coreUsersList({
+			page,
+			pageSize: 200,
+			includeGroups: true
+		});
+		return {
+			results: payload.results,
+			nextPage: getNextPage(payload.pagination)
+		};
+	} catch (caught) {
+		throw await toAuthentikApiError(caught);
 	}
-	const payload = authentikListSchema.parse((await response.json()) as unknown);
-	return {
-		results: payload.results,
-		next: payload.next ?? null
-	};
 }
 
-export async function listAuthentikUsers(fetchImpl: typeof fetch = fetch): Promise<AuthentikDirectoryUser[]> {
-	const baseUrl = normalizeBaseUrl(appEnv.AUTHENTIK_API_BASE_URL);
-	let cursor: string | null = `${baseUrl}/core/users/?page=1&page_size=200`;
+export async function listAuthentikUsers(
+	fetchImpl: typeof fetch = fetch,
+	client: AuthentikUsersClient = createAuthentikUsersClient(fetchImpl)
+): Promise<AuthentikDirectoryUser[]> {
+	let pageNumber: number | null = 1;
 	const users: AuthentikDirectoryUser[] = [];
 	const seenIds = new Set<string>();
 	let attempts = 0;
 	const maxPages = 30;
 
-	while (cursor && attempts < maxPages) {
+	while (pageNumber && attempts < maxPages) {
 		attempts += 1;
-		const page = await fetchPage(cursor, fetchImpl);
+		const page = await fetchPage(pageNumber, client);
 		for (const rawUser of page.results) {
 			const normalized = normalizeAuthentikUser(rawUser);
 			if (!normalized || seenIds.has(normalized.id)) {
@@ -115,18 +159,19 @@ export async function listAuthentikUsers(fetchImpl: typeof fetch = fetch): Promi
 			seenIds.add(normalized.id);
 			users.push(normalized);
 		}
-		cursor = page.next;
+		pageNumber = page.nextPage;
 	}
 
 	return users.sort((a, b) => a.username.localeCompare(b.username));
 }
 
 export async function listAuthentikUsersSafely(
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	client: AuthentikUsersClient = createAuthentikUsersClient(fetchImpl)
 ): Promise<{ users: AuthentikDirectoryUser[]; warning: string | null }> {
 	try {
 		return {
-			users: await listAuthentikUsers(fetchImpl),
+			users: await listAuthentikUsers(fetchImpl, client),
 			warning: null
 		};
 	} catch (caught) {
